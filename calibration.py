@@ -374,15 +374,7 @@ if __name__ == '__main__':
     state = config['global']['state']  # R:红方/B:蓝方
 
     if camera_mode == 'test':
-        video_path = config['paths']['test_video'] 
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        print(f"无法打开测试视频: {video_path}")
-        sys.exit(1)
-    ret, camera_image = cap.read()  # 读取第一帧
-    if not ret:
-        print("无法读取测试视频的第一帧")
-        sys.exit(1)
+        camera_image = cv2.imread('images/test_image.jpg')
     elif camera_mode == 'hik':
         # 海康相机图像获取线程
         thread_camera = threading.Thread(target=hik_camera_get, daemon=True)
