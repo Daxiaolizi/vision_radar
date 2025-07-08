@@ -3,6 +3,11 @@
 # 盲区预测
 # 卡尔曼滤波
 # config
+import numpy as np
+
+# 解决 TensorRT 兼容性问题
+if not hasattr(np, 'bool'):
+    np.bool = np.bool_
 import datetime
 import threading
 import time
@@ -794,7 +799,7 @@ print(f"已启用滤波器类型: {config['filter']['type']}")
 weights_path = config['paths']['models']['car']
 weights_path_next = config['paths']['models']['armor']
 detector = YOLOv5Detector(weights_path, data='yaml/car.yaml', conf_thres=0.1, iou_thres=0.5, max_det=14, ui=True)
-detector_next = YOLOv5Detector(weights_path_next, data='yaml/armor.yaml', conf_thres=0.50, iou_thres=0.2,
+detector_next = YOLOv5Detector(weights_path_next, data='yaml/armor.yaml', conf_thres=0.1, iou_thres=0.2,
                                max_det=1,
                                ui=True)
 
@@ -815,7 +820,16 @@ else:
 camera_image = None
 
 if camera_mode == 'test':
-    camera_image = cv2.imread(config['paths']['test_img'])
+    video_path = config['paths']['test_video'] 
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        print(f"无法打开测试视频: {video_path}")
+        sys.exit(1)
+    ret, camera_image = cap.read()  # 读取第一帧
+    if not ret:
+        print("无法读取测试视频的第一帧")
+        sys.exit(1)
+    
 elif camera_mode == 'hik':
     # 海康相机图像获取线程
     thread_camera = threading.Thread(target=hik_camera_get, daemon=True)
@@ -836,6 +850,16 @@ img_x = img0.shape[1]
 print(img0.shape)
 
 while True:
+    if camera_mode == 'test':
+        ret, frame = cap.read()
+        if not ret: 
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ret, camera_image = cap.read()
+            if not  ret:
+                print("无法读取视频")
+                break
+        camera_image = frame
+     
     # 刷新裁判系统信息UI图像
     information_ui_show = information_ui.copy()
     map = map_backup.copy()
@@ -850,6 +874,7 @@ while True:
         if cls == 'car':
             left, top, w, h = xywh
             left, top, w, h = int(left), int(top), int(w), int(h)
+            print(left, top, w, h)
             # 存储第一次检测结果和区域
             # ROI出机器人区域
             cropped = camera_image[top:top + h, left:left + w]
@@ -858,9 +883,6 @@ while True:
             result_n = detector_next.predict(cropped_img)
             det_time += 1
             if result_n:
-                # 叠加第二次检测结果到原图的对应位置
-                img0[top:top + h, left:left + w] = cropped_img
-
                 for detection1 in result_n:
                     cls, xywh, conf = detection1
                     if cls:  # 所有装甲板都处理，可选择屏蔽一些:
@@ -959,7 +981,7 @@ while True:
 
     te = time.time()
     t_p = te - ts
-    print("fps:", 1 / t_p)  # 打印帧率
+    # print("fps:", 1 / t_p)  # 打印帧率
     # 绘制UI
     _ = draw_information_ui(vulnerability, state, information_ui_show)
     cv2.putText(information_ui_show, "vulnerability_chances: " + str(double_vulnerability_chance),

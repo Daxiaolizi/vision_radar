@@ -1,4 +1,29 @@
-from sys import platform
+import sys
+import os
+import platform
+os.environ['LD_LIBRARY_PATH'] = '/usr/local/TensorRT-8.5.1.7/lib:' + os.environ.get('LD_LIBRARY_PATH', '')
+tensorrt_python_path = '/usr/local/TensorRT-8.5.1.7/python'
+sys.path.insert(0, tensorrt_python_path)  # 使用 insert(0) 确保优先级最高
+
+# 调试信息 - 检查路径是否添加成功
+print(f"System paths: {sys.path}")
+print(f"LD_LIBRARY_PATH: {os.environ.get('LD_LIBRARY_PATH', '')}")
+
+# 尝试提前导入 tensorrt 以验证
+try:
+    import tensorrt as trt
+    print(f"Successfully imported TensorRT {trt.__version__}")
+except ImportError as e:
+    print(f"TensorRT import failed: {e}")
+    # 尝试从常见位置导入
+    try:
+        from tensorrt import *
+        print("Imported tensorrt from alternative path")
+    except:
+        print("All import attempts failed")
+        raise
+
+
 
 from export import export_onnx
 from utils.general import (LOGGER, check_requirements, check_version,
