@@ -3,6 +3,7 @@
 # 盲区预测
 # 卡尔曼滤波
 # config
+import rospy
 import datetime
 import threading
 import time
@@ -25,6 +26,10 @@ from detect_function import YOLOv5Detector
 from RM_serial_py.ser_api import build_send_packet, receive_packet, Radar_decision, \
     build_data_decision, build_data_radar_all
 import yaml
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
+
 with open("config.yaml", "r", encoding="utf-8") as f:  # 指定 UTF-8 编码
     config = yaml.safe_load(f)
 
@@ -685,8 +690,8 @@ def ser_send():
                     guess_value['R7'] = guess_value_now.get('R7')
 
             # 判断飞镖的目标是否切换，切换则尝试发动双倍易伤
-            if target != target_last:
-                target_last = target
+            # if target != target_last:
+                # target_last = target
                 # 有双倍易伤机会，并且当前没有在双倍易伤
                 if double_vulnerability_chance > 0 and opponent_double_vulnerability == 0:
                     time_e = time.time()
@@ -825,24 +830,33 @@ elif camera_mode == 'video':
     thread_camera = threading.Thread(target=video_capture_get, daemon=True)
     thread_camera.start()
 
-while camera_image is None:
+while camera_image is None and camera_mode != 'ros':
     print("等待图像。。。")
     time.sleep(0.5)
 
-# 获取相机图像的画幅，限制点不超限
-img0 = camera_image.copy()
-img_y = img0.shape[0]
-img_x = img0.shape[1]
-print(img0.shape)
+bridge = CvBridge()
+img0 = None
+img_y = 0
+img_x = 0
 
-while True:
-    # 刷新裁判系统信息UI图像
-    information_ui_show = information_ui.copy()
+# ROS图像回调函数
+def ros_image_callback(image_msg):
+    global img0, img_y, img_x, map, information_ui_show
+    try:
+        cv_image = bridge.imgmsg_to_cv2(image_msg, "bgr8")
+    except CvBridgeError as e:
+        print(e)
+        return
+
+    img0 = cv_image.copy()
+    img_y, img_x = img0.shape[:2]
     map = map_backup.copy()
-    det_time = 0
-    img0 = camera_image.copy()
+    print(img0.shape)  # 打印一次形状
+
     ts = time.time()
-    # 第一层神经网络识别
+    det_time = 0
+
+    # 第一层神经网络识别 (车辆检测)
     result0 = detector.predict(img0)
     det_time += 1
     for detection in result0:
@@ -852,7 +866,7 @@ while True:
             left, top, w, h = int(left), int(top), int(w), int(h)
             # 存储第一次检测结果和区域
             # ROI出机器人区域
-            cropped = camera_image[top:top + h, left:left + w]
+            cropped = img0[top:top + h, left:left + w]
             cropped_img = np.ascontiguousarray(cropped)
             # 第二层神经网络识别
             result_n = detector_next.predict(cropped_img)
@@ -979,3 +993,10 @@ while True:
         cv2.imwrite(img_name1, map_show)
         cv2.imwrite(img_name2, img0)
     key = cv2.waitKey(1)
+
+if __name__ == '__main__':
+    rospy.init_node('radar_positioning_node', anonymous=True)
+
+    rospy.Subscriber("/hk_stitched_image", Image, ros_image_callback)
+
+    rospy.spin()

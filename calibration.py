@@ -21,6 +21,10 @@ import yaml
 with open("config.yaml", "r", encoding="utf-8") as f:  # 指定 UTF-8 编码
     config = yaml.safe_load(f)
 
+import rospy
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
+
 # 海康相机图像获取线程
 def hik_camera_get():
     # 获得设备信息
@@ -368,8 +372,18 @@ class MyUI(QWidget):
         self.left_bottom_text.setTextCursor(cursor)
 
 
+bridge = CvBridge()
+
+# ROS图像回调函数
+def ros_image_callback(image_msg):
+    global camera_image
+    try:
+        camera_image = bridge.imgmsg_to_cv2(image_msg, "bgr8")
+    except CvBridgeError as e:
+        print(e)
+
 if __name__ == '__main__':
-    camera_mode = config['global']['camera_mode']  # 'test':测试模式,'hik':海康相机,'video':USB相机（videocapture）
+    camera_mode = config['global']['camera_mode']  # 'test':测试模式,'hik':海康相机,'video':USB相机（videocapture）,'ros':从ROS接收
     camera_image = None
     state = config['global']['state']  # R:红方/B:蓝方
 
@@ -383,8 +397,14 @@ if __name__ == '__main__':
         # USB相机图像获取线程
         thread_camera = threading.Thread(target=video_capture_get, daemon=True)
         thread_camera.start()
+    elif camera_mode == 'ros':
+        rospy.init_node('calibration_node', anonymous=True)
+        rospy.Subscriber("/hk_stitched_image", Image, ros_image_callback)
+        # 在单独线程中运行 rospy.spin() 以处理回调
+        ros_thread = threading.Thread(target=rospy.spin, daemon=True)
+        ros_thread.start()
 
-    while camera_image is None:
+    while camera_image is None and camera_mode != 'ros':
         print("等待图像。。。")
         time.sleep(0.5)
     app = QApplication(sys.argv)
