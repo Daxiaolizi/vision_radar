@@ -3,7 +3,7 @@ global:
   camera_mode: 'ros'  # 'test':测试模式,'hik':海康相机,'video':USB相机（videocapture）
   use_serial: True  # 串口启用开关  保证了无串口时能正常调试，虽然没什么影响（有try）
   save_img: False  # 是否保存图像
-  map_size: [460, 280]  # 战场地图尺寸
+  map_size: [2800, 1500]  # 战场地图尺寸
 
 
 serial: # 串口
