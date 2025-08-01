@@ -26,10 +26,10 @@ paths:
     red: 'arrays_test_red.npy' # 加载标定好的仿射变换矩阵
     blue: 'arrays_test_blue.npy'
   map_images:
-    red: 'images-2025/map_red.jpg'  # 加载红方视角地图
-    blue: 'images-2025/map_blue.jpg'
-    mask: 'images-2025/map_mask.jpg' # 加载落点判断掩码
-    backup: 'images-2025/map.jpg'
+    red: 'images-2025/redRMUC.jpg'  # 加载红方视角地图
+    blue: 'images-2025/blueRMUC.jpg'
+    mask: 'images-2025/maskRMUC.png' # 加载落点判断掩码
+    backup: 'images-2025/mapRMUC.jpg'
   models:
     car: 'models/car.pt'
     armor: 'models/armor.pt'

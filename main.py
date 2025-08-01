@@ -19,7 +19,7 @@ if sys.platform.startswith("win"):
 else:
     sys.path.append("./MvImport_Linux")
     from MvImport_Linux.MvCameraControl_class import *
-import os
+
 import cv2
 import numpy as np
 from detect_function import YOLOv5Detector
@@ -27,8 +27,6 @@ from RM_serial_py.ser_api import build_send_packet, receive_packet, Radar_decisi
     build_data_decision, build_data_radar_all
 import yaml
 import rospy
-import math
-
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge, CvBridgeError
 
@@ -155,92 +153,10 @@ mapping_table = {
 }
 
 send_map={}
-
-
-
 # 盲区预测点位
 guess_table = {}
 for robot, points in config['blind_zone']['points'].items():
     guess_table[robot] = [tuple(point) for point in points]
-
-d_factor = 0.01
-cos_factor = 0.003
-class Predict:
-    global guess_table
-
-    def __init__(self):
-        self.trajectory = []
-        self.flag = False
-
-    def add_point(self, point):
-        self.trajectory.append(point)
-
-    def clear_point(self):
-        if len(self.trajectory) > 105:
-            del self.trajectory[:100]
-
-    def predict_point(self, guess_points):
-        if len(self.trajectory) < 2:
-            return sorted(guess_points, key=lambda p: math.sqrt(p[0] ** 2 + p[1] ** 2))
-
-        if not guess_points:
-            return []
-
-        # 计算速度向量
-        last_pos = self.trajectory[-1]
-        prev_pos = self.trajectory[-2]
-        v_vector = (last_pos[0] - prev_pos[0], last_pos[1] - prev_pos[1])
-
-        scores = []
-
-        for point in guess_points:
-            # 计算到固定点的向量
-            d_vector = (point[0] - last_pos[0], point[1] - last_pos[1])
-
-            # 计算余弦相似度
-            dot_product = v_vector[0] * d_vector[0] + v_vector[1] * d_vector[1]
-            v_norm = math.sqrt(v_vector[0] ** 2 + v_vector[1] ** 2)
-            d_norm = math.sqrt(d_vector[0] ** 2 + d_vector[1] ** 2)
-            cos_sim = dot_product / (v_norm * d_norm + 1e-8)  # 避免除零
-
-            # 计算欧式距离
-            distance = d_norm
-            d_score = math.exp(-distance * d_factor)
-
-            # 分数值确定优先级
-            score = cos_factor * cos_sim + (1 - cos_factor) * d_score
-            scores.append((point, score))
-
-        scores.sort(key=lambda x: x[1], reverse=True)
-
-        return [item[0] for item in scores]
-
-    def get_points(self, name):
-        if self.flag:
-            guess_table[name] = self.predict_point(guess_table.get(name))
-            self.flag = False
-        #     print(name, '进行预测')
-        # else:
-        #     print(name, '已经预测')
-
-
-guess_predict = {
-    "B1": Predict(),
-    "B2": Predict(),
-    "B3": Predict(),
-    "B4": Predict(),
-    "B7": Predict(),
-
-    "R1": Predict(),
-    "R2": Predict(),
-    "R3": Predict(),
-    "R4": Predict(),
-    "R7": Predict()
-}
-
-
-# guess_predict=Predict()
-
 
 class KalmanFilter:
     def __init__(self, process_noise=1e-5, measurement_noise=1e-1):
@@ -406,10 +322,6 @@ class SlidingWindowFilter:
             if current_time - self.last_update.get(name, 0) > self.max_inactive_time:
                 to_remove.append(name)
                 guess_list[name] = True
-            # 识别到机器人，不进行盲区预测
-            else:
-                guess_list[name] = False
-                guess_predict[name].flag = True
 
         for name in to_remove:
             del self.windows[name]
@@ -422,10 +334,6 @@ class SlidingWindowFilter:
                 y_avg = sum(p[1] for p in window) / len(window)
                 filtered[name] = (x_avg, y_avg)
                 guess_list[name] = False
-            else:
-                if len(window) > 0:
-                    filtered[name] = window[-1]
-                    guess_list[name] = False
 
         return filtered
 
@@ -577,8 +485,7 @@ def ser_send():
     seq = 0
     global chances_flag
     global guess_value
-    global guess_table
-    global guess_predict
+    global send_map
     # 单点预测时间
     guess_time = {
         'B1': 0,
@@ -1049,7 +956,6 @@ def ros_image_callback(image_msg):
                         color_m = (0, 0, 255)
                     else:
                         color_m = (255, 0, 0)
-
                     if state == 'R':
                         filtered_xyz = (2800 - xyxy[1], xyxy[0])  # 缩放坐标到地图图像
                     else:
